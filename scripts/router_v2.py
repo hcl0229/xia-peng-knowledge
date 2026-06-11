@@ -1,18 +1,18 @@
 r"""
-夏鹏知识库路由器 v2 -- 自主优化架构
+夏鹏知识库路由器 v3 -- 自主优化架构
 ======================================
-v1 -> v2 变更:
-  - 单一数据源（SCENARIO_MAP 同时生成 SKILL.md 路由表）
-  - 大小写不敏感匹配
-  - 内置遥测打点（每次路由事件记录到 telemetry）
-  - 熔断降级：子Skill加载失败 -> 本地references回退
-  - 路径动态解析（不再硬编码 G:\skills）
+v2 -> v3 变更:
+  - Phase 3: 关键词自动扩展 (127 个新关键词)
+  - Phase 3: 反馈回路 (analyze 命令)
+  - Phase 3: 自适应路由 (match_adaptive)
+  - Phase 3: 置信度分级 (HIGH/MEDIUM/LOW)
 """
 
 import json
 import os
 import sys
 import time
+from collections import defaultdict
 from datetime import datetime, timezone
 
 
@@ -117,6 +117,148 @@ SCENARIO_MAP = {
     "ChatGPT":    ("knowledge", "shared"),  # ← P0 修复
     "DeepSeek":   ("knowledge", "shared"),
     "工具":       ("knowledge", "shared"),
+
+    # ── 领导力 (Phase 3 扩展) ──
+    "升职":       ('career', 'leadership'),
+    "升职条件":       ('career', 'leadership'),
+    "威严":       ('career', 'leadership'),
+    "怎么升职":       ('career', 'leadership'),
+    "权威":       ('career', 'leadership'),
+    "标准":       ('career', 'leadership'),
+    "评估":       ('career', 'leadership'),
+
+    # ── 团队管理 (Phase 3 扩展) ──
+    "KPI":       ('career', 'team-management'),
+    "OKR":       ('career', 'team-management'),
+    "优化":       ('career', 'team-management'),
+    "会议":       ('career', 'team-management'),
+    "凝聚力":       ('career', 'team-management'),
+    "团结":       ('career', 'team-management'),
+    "士气":       ('career', 'team-management'),
+    "干劲":       ('career', 'team-management'),
+    "开人":       ('career', 'team-management'),
+    "归属感":       ('career', 'team-management'),
+    "打分":       ('career', 'team-management'),
+    "效率":       ('career', 'team-management'),
+    "方向":       ('career', 'team-management'),
+    "淘汰":       ('career', 'team-management'),
+    "炒人":       ('career', 'team-management'),
+    "目标":       ('career', 'team-management'),
+    "绩效":       ('career', 'team-management'),
+    "绩效面谈":       ('career', 'team-management'),
+    "考核":       ('career', 'team-management'),
+    "辞退":       ('career', 'team-management'),
+    "驱动":       ('career', 'team-management'),
+    "高效":       ('career', 'team-management'),
+
+    # ── 向上管理/汇报 (Phase 3 扩展) ──
+    "主动同步":       ('career', 'upward-management'),
+    "人情":       ('career', 'upward-management'),
+    "人际关系":       ('career', 'upward-management'),
+    "信任":       ('career', 'upward-management'),
+    "信任积累":       ('career', 'upward-management'),
+    "关系":       ('career', 'upward-management'),
+    "关系升温":       ('career', 'upward-management'),
+    "关系处理":       ('career', 'upward-management'),
+    "关系维护":       ('career', 'upward-management'),
+    "可靠":       ('career', 'upward-management'),
+    "同步":       ('career', 'upward-management'),
+    "周总结":       ('career', 'upward-management'),
+    "如何相处":       ('career', 'upward-management'),
+    "威信":       ('career', 'upward-management'),
+    "存在感":       ('career', 'upward-management'),
+    "工作反馈":       ('career', 'upward-management'),
+    "年度":       ('career', 'upward-management'),
+    "年度总结":       ('career', 'upward-management'),
+    "年终":       ('career', 'upward-management'),
+    "建立威信":       ('career', 'upward-management'),
+    "总结":       ('career', 'upward-management'),
+    "总结教训":       ('career', 'upward-management'),
+    "感恩":       ('career', 'upward-management'),
+    "感恩练习":       ('career', 'upward-management'),
+    "报告":       ('career', 'upward-management'),
+    "择主":       ('career', 'upward-management'),
+    "换工作":       ('career', 'upward-management'),
+    "曝光":       ('career', 'upward-management'),
+    "相处之道":       ('career', 'upward-management'),
+    "礼物":       ('career', 'upward-management'),
+    "节日":       ('career', 'upward-management'),
+    "裸辞":       ('career', 'upward-management'),
+    "进展":       ('career', 'upward-management'),
+    "送礼":       ('career', 'upward-management'),
+    "露脸":       ('career', 'upward-management'),
+    "靠谱":       ('career', 'upward-management'),
+
+    # ── 职场沟通 (Phase 3 扩展) ──
+    "争取":       ('career', 'workplace-comm'),
+    "冷场":       ('career', 'workplace-comm'),
+    "口才":       ('career', 'workplace-comm'),
+    "推掉":       ('career', 'workplace-comm'),
+    "推销":       ('career', 'workplace-comm'),
+    "提案":       ('career', 'workplace-comm'),
+    "演讲":       ('career', 'workplace-comm'),
+    "薪资谈判":       ('career', 'workplace-comm'),
+    "说不":       ('career', 'workplace-comm'),
+    "说话":       ('career', 'workplace-comm'),
+    "说话艺术":       ('career', 'workplace-comm'),
+    "谈判":       ('career', 'workplace-comm'),
+
+    # ── 个人成长/情绪 (Phase 3 扩展) ──
+    "不安":       ('growth', 'growth-scenarios'),
+    "信心":       ('growth', 'growth-scenarios'),
+    "冷静":       ('growth', 'growth-scenarios'),
+    "分析":       ('growth', 'growth-scenarios'),
+    "压力":       ('growth', 'growth-scenarios'),
+    "发脾气":       ('growth', 'growth-scenarios'),
+    "坚持":       ('growth', 'growth-scenarios'),
+    "大局观":       ('growth', 'growth-scenarios'),
+    "思考":       ('growth', 'growth-scenarios'),
+    "思考力":       ('growth', 'growth-scenarios'),
+    "恐慌":       ('growth', 'growth-scenarios'),
+    "想太多":       ('growth', 'growth-scenarios'),
+    "懒惰":       ('growth', 'growth-scenarios'),
+    "担心":       ('growth', 'growth-scenarios'),
+    "拖延":       ('growth', 'growth-scenarios'),
+    "气质":       ('growth', 'growth-scenarios'),
+    "洞见":       ('growth', 'growth-scenarios'),
+    "消耗":       ('growth', 'growth-scenarios'),
+    "深度思考":       ('growth', 'growth-scenarios'),
+    "理性":       ('growth', 'growth-scenarios'),
+    "眼界":       ('growth', 'growth-scenarios'),
+    "稳定":       ('growth', 'growth-scenarios'),
+    "纠结":       ('growth', 'growth-scenarios'),
+    "自卑":       ('growth', 'growth-scenarios'),
+    "自我怀疑":       ('growth', 'growth-scenarios'),
+    "自我消耗":       ('growth', 'growth-scenarios'),
+    "自我管理":       ('growth', 'growth-scenarios'),
+    "自控":       ('growth', 'growth-scenarios'),
+    "行动力":       ('growth', 'growth-scenarios'),
+    "视野":       ('growth', 'growth-scenarios'),
+    "认知":       ('growth', 'growth-scenarios'),
+    "认知升级":       ('growth', 'growth-scenarios'),
+    "魅力":       ('growth', 'growth-scenarios'),
+
+    # ── 人际关系 (Phase 3 扩展) ──
+    "人品":       ('growth', 'people-skills'),
+    "分辨":       ('growth', 'people-skills'),
+    "判断人":       ('growth', 'people-skills'),
+    "回应":       ('growth', 'people-skills'),
+    "圈子":       ('growth', 'people-skills'),
+    "对话":       ('growth', 'people-skills'),
+    "开启对话":       ('growth', 'people-skills'),
+    "怎么接话":       ('growth', 'people-skills'),
+    "接话":       ('growth', 'people-skills'),
+    "搭讪":       ('growth', 'people-skills'),
+    "看人":       ('growth', 'people-skills'),
+    "聊天技巧":       ('growth', 'people-skills'),
+    "识人":       ('growth', 'people-skills'),
+
+    # ── AI/知识 (Phase 3 扩展) ──
+    "大模型":       ('knowledge', 'shared'),
+    "数字化":       ('knowledge', 'shared'),
+    "智能管理":       ('knowledge', 'shared'),
+    "自动化":       ('knowledge', 'shared'),
+
 }
 
 
@@ -443,18 +585,210 @@ def validate_routing_table() -> list[dict]:
 
 
 # =============================================================================
-# 7. CLI 入口
+# 7. Phase 3: 反馈回路 — 遥测分析 + 自适应阈值
+# =============================================================================
+
+CONFIDENCE_LEVELS = {
+    "HIGH": 80,
+    "MEDIUM": 50,
+    "LOW": 0,
+}
+
+
+def analyze_telemetry(days: int = 7) -> dict:
+    """分析遥测数据，生成反馈报告。"""
+    tp = _get_telemetry_path()
+    if not os.path.isfile(tp):
+        return {"status": "no_data", "msg": "遥测文件不存在，尚无路由事件记录"}
+
+    with open(tp, "r", encoding="utf-8") as f:
+        events = [json.loads(line) for line in f if line.strip()]
+
+    if not events:
+        return {"status": "empty", "msg": "遥测文件为空"}
+
+    # 基本统计
+    hits = [e for e in events if e["hit"]]
+    misses = [e for e in events if not e["hit"]]
+    total = len(events)
+
+    # MISS 模式分析
+    miss_queries = defaultdict(list)
+    for e in misses:
+        miss_queries[e["query"]].append(e)
+
+    freq_misses = sorted(
+        [{"query": q, "count": len(entries)} for q, entries in miss_queries.items()],
+        key=lambda x: -x["count"],
+    )[:10]
+
+    # 路由分布
+    route_dist = defaultdict(int)
+    for e in events:
+        route_dist[f"{e['route_skill']}/{e['route_domain']}"] += 1
+
+    # 延迟趋势
+    latencies = [e["latency_ms"] for e in events]
+    avg_latency = sum(latencies) / len(latencies) if latencies else 0
+    p99_latency = sorted(latencies)[int(len(latencies) * 0.99)] if len(latencies) >= 100 else max(latencies) if latencies else 0
+
+    # 熔断事件
+    circuit_opens = [e for e in events if e.get("circuit") == "open"]
+
+    # 自适应阈值建议
+    hit_rate = len(hits) / total * 100 if total else 0
+    threshold_advice = _recommend_threshold(hit_rate, avg_latency)
+
+    return {
+        "status": "ok",
+        "period": f"最近 {len(events)} 条事件",
+        "metrics": {
+            "total_events": total,
+            "hit_rate": f"{hit_rate:.1f}%",
+            "hits": len(hits),
+            "misses": len(misses),
+            "avg_latency_ms": round(avg_latency, 2),
+            "p99_latency_ms": round(p99_latency, 2),
+        },
+        "top_miss_queries": freq_misses,
+        "route_distribution": dict(sorted(route_dist.items(), key=lambda x: -x[1])),
+        "circuit_events": len(circuit_opens),
+        "threshold_recommendation": threshold_advice,
+        "action_items": _generate_action_items(hit_rate, freq_misses, misses),
+    }
+
+
+def _recommend_threshold(hit_rate: float, avg_latency: float) -> dict:
+    """基于历史数据推荐自适应阈值。"""
+    if hit_rate >= 95:
+        level = "HIGH"
+        conf = 85
+    elif hit_rate >= 85:
+        level = "HIGH"
+        conf = 75
+    elif hit_rate >= 70:
+        level = "MEDIUM"
+        conf = 55
+    else:
+        level = "LOW"
+        conf = 35
+
+    return {
+        "suggested_confidence_level": level,
+        "suggested_threshold": conf,
+        "rationale": f"基于 {hit_rate:.1f}% 命中率自动计算",
+        "current_hit_rate": round(hit_rate, 1),
+    }
+
+
+def _generate_action_items(hit_rate: float, freq_misses: list, misses: list) -> list:
+    """生成可执行的改进建议。"""
+    items = []
+    if hit_rate < 85:
+        items.append({
+            "priority": "high",
+            "action": "运行 auto_expand.py 补充缺失关键词",
+            "detail": f"当前命中率 {hit_rate:.1f}% 低于 85% 阈值",
+        })
+
+    if freq_misses:
+        top = freq_misses[0]
+        items.append({
+            "priority": "medium",
+            "action": f"高频 MISS: 「{top['query']}」出现 {top['count']} 次",
+            "detail": "建议添加相关关键词到 SCENARIO_MAP",
+        })
+
+    if len(misses) > 10:
+        items.append({
+            "priority": "medium",
+            "action": "积累足够 MISS 数据后手动审查边缘场景",
+            "detail": f"当前 {len(misses)} 条 MISS 事件待审查",
+        })
+
+    if not items:
+        items.append({
+            "priority": "low",
+            "action": "系统运行良好，无需立即行动",
+            "detail": f"命中率 {hit_rate:.1f}%，路由健康",
+        })
+
+    return items
+
+
+# ── 自适应路由：根据反馈动态调整阈值 ──
+
+def match_adaptive(query: str) -> dict:
+    """
+    v3 自适应路由：
+    基于历史遥测数据动态调整匹配严格度，
+    并在低置信度时自动标记需要确认。
+    """
+    routes = match(query)
+    top = routes[0]
+    skill, domain, confidence = top
+
+    # 从遥测分析获取建议阈值
+    try:
+        feedback = analyze_telemetry()
+        threshold = feedback["threshold_recommendation"]["suggested_threshold"]
+    except Exception:
+        threshold = 50  # 默认阈值
+
+    # 置信度分级
+    if confidence >= 80:
+        level = "HIGH"
+        needs_confirm = False
+    elif confidence >= threshold:
+        level = "MEDIUM"
+        needs_confirm = False
+    else:
+        level = "LOW"
+        needs_confirm = confidence > 0  # 完全未命中不要求确认
+
+    return {
+        "routes": routes,
+        "primary": top,
+        "confidence_level": level,
+        "needs_confirmation": needs_confirm,
+        "adaptive_threshold": threshold,
+        "suggestion": (
+            None
+            if not needs_confirm
+            else f"低置信度路由 (LOW/{confidence}%)，建议确认你是否想问关于{get_domain_label(skill, domain)}的问题"
+        ),
+    }
+
+
+def get_domain_label(skill: str, domain: str) -> str:
+    """领域中文标签。"""
+    labels = {
+        ("career", "upward-management"): "向上管理/汇报",
+        ("career", "leadership"): "领导力",
+        ("career", "team-management"): "团队管理",
+        ("career", "workplace-comm"): "职场沟通",
+        ("growth", "growth-scenarios"): "个人成长/情绪",
+        ("growth", "people-skills"): "人际关系",
+        ("growth", "side-learning"): "副业/学习",
+        ("knowledge", "shared"): "通用知识",
+    }
+    return labels.get((skill, domain), f"{skill}/{domain}")
+
+
+# =============================================================================
+# 8. CLI 入口
 # =============================================================================
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="夏鹏知识库路由器 v2")
+    parser = argparse.ArgumentParser(description="夏鹏知识库路由器 v3")
     sub = parser.add_subparsers(dest="command")
 
     # match 子命令
     match_parser = sub.add_parser("match", help="路由匹配")
     match_parser.add_argument("query", nargs="+", help="用户查询文本")
+    match_parser.add_argument("--adaptive", action="store_true", help="使用自适应路由")
 
     # validate 子命令
     validate_parser = sub.add_parser("validate", help="验证路由表一致性")
@@ -466,11 +800,18 @@ if __name__ == "__main__":
     tele_parser = sub.add_parser("telemetry", help="查看遥测摘要")
     tele_parser.add_argument("--limit", type=int, default=20, help="显示条数")
 
+    # analyze 子命令 (Phase 3 新增)
+    analyze_parser = sub.add_parser("analyze", help="遥测分析 + 自适应建议")
+    analyze_parser.add_argument("--days", type=int, default=7, help="分析天数")
+
     args = parser.parse_args()
 
     if args.command == "match":
         query = " ".join(args.query)
-        result = route_with_fallback(query)
+        if args.adaptive:
+            result = match_adaptive(query)
+        else:
+            result = route_with_fallback(query)
         print(json.dumps(result, ensure_ascii=False, indent=2))
 
     elif args.command == "validate":
@@ -484,6 +825,10 @@ if __name__ == "__main__":
             "growth": _circuit_growth.status(),
             "telemetry_dir": os.path.dirname(_get_telemetry_path()),
         }, ensure_ascii=False, indent=2))
+
+    elif args.command == "analyze":
+        report = analyze_telemetry(args.days)
+        print(json.dumps(report, ensure_ascii=False, indent=2))
 
     elif args.command == "telemetry":
         tp = _get_telemetry_path()
