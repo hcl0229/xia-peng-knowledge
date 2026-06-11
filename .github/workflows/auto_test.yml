@@ -53,6 +53,7 @@ jobs:
     name: 📦 验证打包完整性
     runs-on: ubuntu-latest
     needs: test
+    if: always()  # 即使测试有警告也运行打包验证
     steps:
       - uses: actions/checkout@v4
 
